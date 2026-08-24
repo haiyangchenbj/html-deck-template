@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>演示标题 · 演讲者 · 活动名</title>
+<meta name="description" content="页面描述（搜索引擎/分享卡片用）">
+<meta name="author" content="你的名字">
+<link rel="canonical" href="">
+<!-- 收藏夹图标：改 data URI 里的颜色即可 -->
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="%23070810"/><circle cx="16" cy="16" r="8" fill="%2326C6DA"/></svg>'>
+
+<style>
+/* =====================================================================
+   主题变量：整套 deck 的颜色/圆角/字体都在这里改，一处改全局生效
+   ===================================================================== */
+:root{
+  --bg:#070810; --bg2:#0C1020; --panel:#121722; --panel2:#0E1220;
+  --line:#2A3040; --line2:#3A4256;
+  --ink:#FFFFFF; --ink2:#F2F5FA; --mut:#C6CEDC;
+  --cyan:#26C6DA; --blue:#3B6FF0; --blue2:#5E8FF8;
+  --pink:#DC3CB4; --green:#27C08A; --amber:#F0A030;
+  --r-card:10px; --r-box:6px;
+  /* 字体默认走系统栈；如需思源黑体/Inter，见文件底部「字体自托管说明」 */
+  --sans:"PingFang SC","Source Han Sans CN","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#000}
+body{font-family:var(--sans);color:var(--ink);overflow:hidden}
+
+/* =====================================================================
+   舞台：固定 1280x720 逻辑画布，JS 按视口等比缩放。
+   所有内容只管按 1280x720 布局，任何屏幕/投影仪上比例永不变形。
+   ===================================================================== */
+#stage{position:fixed;left:50%;top:50%;width:1280px;height:720px;transform:translate(-50%,-50%);
+  transform-origin:center center;background:var(--bg);overflow:hidden}
+
+/* 每一页：绝对定位叠放，靠 .active 显隐。换页是硬切，干净利落 */
+.slide{position:absolute;inset:0;display:none;flex-direction:column;padding:104px 76px 62px;
+  background:
+    radial-gradient(1100px 620px at 22% 8%, rgba(59,111,240,.16), transparent 62%),
+    radial-gradient(900px 600px at 88% 92%, rgba(38,198,218,.10), transparent 60%),
+    linear-gradient(160deg,#0C1020 0%,#070810 58%,#05060C 100%)}
+.slide.active{display:flex}
+
+/* =====================================================================
+   页眉页脚（chrome）：真实 DOM 写在 #chrome-src 模板里，
+   JS 启动时克隆进每一页（首页和末页除外），页码自动生成。
+   每页左上角的标题来自该页 <section> 的 data-title 属性。
+   ===================================================================== */
+.chrome{position:absolute;z-index:5;pointer-events:none}
+.c-hdr{left:76px;right:76px;top:26px;display:flex;justify-content:space-between;align-items:center;
+  gap:24px;min-height:42px}
+.c-hdr .ttl{display:flex;align-items:center;gap:12px;font-size:29.3px;font-weight:400;color:var(--ink);
+  letter-spacing:.005em;min-width:0;flex:1;height:42px;line-height:42px}
+.c-hdr .ttl span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:42px}
+.c-hdr .ttl .mark{height:36px;width:auto;display:block;flex:0 0 auto}
+.c-hdr .logos{display:flex;align-items:center;height:42px}
+.c-hdr .logos img{height:28px;display:block;opacity:.95}
+.c-foot{right:76px;bottom:24px;text-align:right;line-height:1.25}
+.c-foot .en{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.02em;
+  background:linear-gradient(90deg,var(--cyan),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent}
+.c-foot .cn{font-size:11.5px;color:var(--mut);margin-top:2px}
+.c-pgw{left:76px;bottom:24px;font-family:var(--mono);font-size:12px;color:var(--mut);letter-spacing:.05em;
+  display:flex;gap:16px;align-items:center;pointer-events:auto}
+.c-pgw a{color:var(--cyan);text-decoration:none}
+#chrome-src{display:none}
+
+/* =====================================================================
+   排版元件
+   ===================================================================== */
+/* kicker：每页开头的小标签（自动带渐变短线） */
+.kicker{font-family:var(--mono);font-size:12.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--cyan);display:flex;align-items:center;gap:11px;margin-bottom:20px}
+.kicker::before{content:"";width:24px;height:2.5px;background:linear-gradient(90deg,var(--cyan),var(--blue));border-radius:2px}
+
+h1{font-size:73.3px;line-height:1.18;font-weight:700;letter-spacing:-.015em}
+.h-slide{font-size:31px;line-height:1.26;font-weight:700;letter-spacing:-.005em;max-width:48ch;
+  margin-bottom:22px;text-wrap:balance}
+.h-slide.sm{font-size:28px}
+.sub{font-size:19px;line-height:1.5;font-weight:400;color:var(--ink2);max-width:56ch}
+.lead{font-size:17.3px;line-height:1.62;font-weight:400;color:var(--ink2);max-width:64ch}
+.cap{font-size:17.3px;line-height:1.62;font-weight:400;color:var(--ink2);max-width:88ch}
+.cap.c{text-align:center;margin:0 auto}
+.mono{font-family:var(--mono)}
+.mut{color:var(--mut)}
+.cy{color:var(--cyan)} .bl{color:var(--blue2)} .pk{color:var(--pink)} .gr{color:var(--green)} .am{color:var(--amber)}
+strong,b{font-weight:700;color:#fff}
+
+/* takeaway：页面底部的结论条（居中大字，最好一句话） */
+.takeaway{font-size:17.3px;line-height:1.6;font-weight:500;text-align:center;text-wrap:balance;
+  max-width:72ch;margin:0 auto;color:var(--ink)}
+
+/* 布局骨架：.body 占满中间区域并垂直居中；.row 横排；.fill 均分 */
+.body{flex:1;display:flex;flex-direction:column;min-height:0;justify-content:center}
+.row{display:flex;flex-direction:row;gap:28px;align-items:stretch}
+.fill{flex:1;min-width:0;min-height:0}
+
+/* 卡片组 */
+.cards{display:flex;gap:20px}
+.card{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-card);
+  padding:24px 26px;position:relative;overflow:hidden}
+.card .ttl{font-size:19px;font-weight:700;margin-bottom:12px}
+.card .dsc{font-size:15px;line-height:1.66;color:var(--mut)}
+.card.c-cy{border-top:2px solid var(--cyan)} .card.c-bl{border-top:2px solid var(--blue)}
+.card.c-pk{border-top:2px solid var(--pink)} .card.c-gr{border-top:2px solid var(--green)}
+.card.c-mut{opacity:.92}
+
+/* 图表容器：JS 会往里面画 SVG，自动等比缩放 */
+.chart{width:100%;height:100%;min-height:0}
+.chart svg{width:100%;height:100%;display:block}
+
+/* 简单数据表（网页表格，仅屏幕/深色主题用） */
+.dtable{border-collapse:collapse;width:100%;font-size:14.5px}
+.dtable th{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--mut);text-align:left;padding:8px 12px;border-bottom:1px solid var(--line2)}
+.dtable td{padding:10px 12px;border-bottom:1px solid var(--line);color:var(--ink2);line-height:1.5}
+.dtable .num{font-family:var(--mono)}
+
+/* 二维码角标 */
+.qr-corner{position:absolute;right:76px;top:96px;display:flex;flex-direction:column;align-items:center;gap:6px;z-index:4}
+.qr-corner .qrtop{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--mut);line-height:1}
+.qr-corner img{width:76px;height:76px;display:block;background:#fff;padding:4px;border-radius:6px}
+
+/* =====================================================================
+   页面类型：标题页
+   ===================================================================== */
+.title{padding:0;justify-content:center}
+.title .wrap{display:flex;height:100%;align-items:center}
+.title .art{width:32%;position:relative;height:100%;display:flex;align-items:center;justify-content:center}
+.title .art .ph{width:280px;height:280px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#1d4d63,#08111c 70%);
+  box-shadow:0 0 80px rgba(38,198,218,.45), inset 0 0 60px rgba(0,0,0,.5);
+  position:relative;z-index:2}
+.title .art .ph::after{content:"";position:absolute;inset:18%;border-radius:50%;
+  background:radial-gradient(circle at 40% 35%,rgba(94,143,248,.55),transparent 60%)}
+.title .art .orb{position:absolute;border-radius:50%}
+.title .art .o1{width:104px;height:104px;left:8%;top:16%;background:radial-gradient(circle at 35% 30%,#16303a,#0a1420);box-shadow:0 0 40px rgba(38,198,218,.20)}
+.title .art .o2{width:74px;height:74px;left:62%;bottom:13%;background:radial-gradient(circle at 35% 30%,#2a1130,#12060f);box-shadow:0 0 42px rgba(220,60,180,.28)}
+.title .art .ring{position:absolute;left:12%;bottom:22%;width:68px;height:68px;border-radius:50%;
+  border:2px solid rgba(240,160,48,.55);border-right-color:transparent;border-bottom-color:transparent;transform:rotate(28deg)}
+.title .art .star{position:absolute;right:8%;top:18%;width:22px;height:22px;
+  background:conic-gradient(from 0deg,transparent 0 8%,#fff 10%,transparent 12% 38%,#fff 40%,transparent 42% 63%,#fff 65%,transparent 67% 88%,#fff 90%,transparent 92%);
+  -webkit-mask:radial-gradient(circle,#000 40%,transparent 72%);mask:radial-gradient(circle,#000 40%,transparent 72%);opacity:.85}
+.title .txt{width:68%;padding:0 64px 0 0}
+.title h1{margin:14px 0 0;white-space:nowrap}
+.title .sub{margin-top:22px;font-size:42.7px;line-height:1.42;font-weight:300;max-width:30ch}
+.title .auth{margin-top:40px;display:flex;align-items:center;gap:15px}
+.title .auth .bar{width:3px;height:58px;border-radius:2px;background:linear-gradient(180deg,var(--cyan),var(--blue))}
+.title .auth .nm{font-size:26.7px;font-weight:700;line-height:1.25}
+.title .auth .rl{font-size:26.7px;font-weight:400;color:var(--mut);margin-top:4px;line-height:1.25}
+.title .auth .wxqr{margin-left:34px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.title .auth .wxqr img{width:104px;height:104px;display:block;background:#fff;padding:5px;border-radius:8px}
+.title .auth .wxqr span{font-size:15px;color:var(--mut);letter-spacing:.08em}
+.title .meta{font-family:var(--mono);font-size:16px;margin-top:20px;color:var(--mut);letter-spacing:.03em}
+
+/* =====================================================================
+   页面类型：大字主张页（claim）——一句核心论断，页面自带聚光背景
+   ===================================================================== */
+.claimslide{background:
+  radial-gradient(820px 560px at 50% 44%, rgba(38,198,218,.20), transparent 66%),
+  radial-gradient(620px 460px at 22% 84%, rgba(59,111,240,.14), transparent 62%),
+  linear-gradient(155deg,#0A0C16 0%,#05060C 100%)}
+.bigclaim{font-size:46px;line-height:1.36;font-weight:700;letter-spacing:-.012em;text-align:center;
+  text-wrap:balance;max-width:26ch}
+
+/* =====================================================================
+   页面类型：章节分隔页（divider）——大编号 + 章节名
+   ===================================================================== */
+.divider{padding-top:110px}
+.divider .num{font-family:var(--mono);font-size:24px;font-weight:700;letter-spacing:.3em;color:var(--cyan);margin-bottom:28px}
+.divider .h-slide{font-size:54px;max-width:24ch;line-height:1.2}
+.divider .sub{margin-top:14px;font-size:20px}
+
+/* =====================================================================
+   页面类型：结尾页
+   ===================================================================== */
+.closing{justify-content:center;align-items:center;text-align:center}
+.closing .bigclaim{font-size:40px}
+.closing .who{margin-top:34px;font-size:19px;color:var(--mut)}
+.closing .links{margin-top:26px;display:flex;gap:34px}
+.closing .links a{color:var(--cyan);text-decoration:none;font-family:var(--mono);font-size:14px}
+
+/* =====================================================================
+   入场动画（可选）：翻到某页时其子元素依次浮现。
+   给需要动画的元素加 class="au"（可加 au-d1/au-d2/au-d3 延迟）。
+   打印时自动禁用。
+   ===================================================================== */
+.slide.active .au{animation:auIn .55s cubic-bezier(.22,.61,.36,1) both}
+.slide.active .au-d1{animation-delay:.12s}
+.slide.active .au-d2{animation-delay:.24s}
+.slide.active .au-d3{animation-delay:.36s}
+@keyframes auIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+/* =====================================================================
+   打印 / 导出 PDF：浏览器 Ctrl+P → 目标「另存为 PDF」→ 边距无 →
+   背景图形勾选。每页自动一页纸，页眉页脚每页都在。
+   ===================================================================== */
+@media print{
+  @page{size:1280px 720px;margin:0}
+  html,body{background:#000;height:auto;overflow:visible}
+  #stage{position:static;transform:none!important;width:1280px;height:auto;left:0;top:0}
+  .slide{display:flex!important;position:relative;inset:auto;width:1280px;height:720px;
+    page-break-after:always;break-after:page;overflow:hidden;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .c-pgw{display:none!important}
+  .au{animation:none!important;opacity:1!important;transform:none!important}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+
+<!-- =====================================================================
+     第 1 页 · 标题页
+     填：主标题（可用 <br> 断行 + <span class="cy"> 着色）、副题、姓名、
+         头衔、二维码图（img/qr-wechat.png，不用可删 .wxqr 整块）、日期地点
+     ===================================================================== -->
+<section class="slide title">
+  <div class="wrap">
+    <div class="art">
+      <div class="orb o1"></div><div class="orb o2"></div><div class="ring"></div><div class="star"></div>
+      <div class="ph"></div><!-- 换成 <img src="img/xxx.png"> 放主视觉 -->
+    </div>
+    <div class="txt">
+      <div class="kicker">EVENT KICKOFF · 活动名</div>
+      <h1>主标题一行，<br><span class="cy">关键词着色</span></h1>
+      <div class="sub">副标题：一句话说清这场讲什么</div>
+      <div class="auth">
+        <div class="bar"></div>
+        <div><div class="nm">姓名</div><div class="rl">头衔 · 团队</div></div>
+        <div class="wxqr"><img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' fill='%23222'/><text x='48' y='52' text-anchor='middle' fill='%23666' font-family='monospace' font-size='9'>QR PLACEHOLDER</text></svg>" alt="微信"><span>微信</span></div>
+      </div>
+      <div class="meta">2026.08.21 · 深圳</div>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     第 2 页 · 三卡片内容页（最常用的页面类型）
+     填：section 的 data-title（进页眉左上角）；每张卡片 标题+描述
+     加卡片：复制一个 .card 块即可，flex 自动均分
+     ===================================================================== -->
+<section class="slide" data-title="这里写本页页眉标题">
+  <div class="body" style="justify-content:center;gap:26px">
+    <div class="cards">
+      <div class="card c-mut au"><div class="ttl">卡片一</div>
+        <div class="dsc">描述文字。支持 <strong>加粗强调</strong>，<br>用 br 控制断行节奏。</div></div>
+      <div class="card c-mut au au-d1"><div class="ttl">卡片二</div>
+        <div class="dsc">描述文字。</div></div>
+      <div class="card c-cy au au-d2"><div class="ttl">卡片三（重点）</div>
+        <div class="dsc">顶边有强调色的卡片用来放结论。<br>c-cy / c-bl / c-pk / c-gr 四种。</div></div>
+    </div>
+    <div class="takeaway au au-d3">底部一句话结论（可删）。</div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     第 3 页 · 大字主张页
+     用于章节之间的「金句」。data-title 留空则页眉标题保持默认。
+     ===================================================================== -->
+<section class="slide claimslide" data-title="">
+  <div class="body" style="justify-content:center;align-items:center;gap:30px">
+    <div class="bigclaim au">一句核心主张，<br><span class="cy">关键词着色</span>。</div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     第 4 页 · 章节分隔页
+     填：编号（01/02/…）、章节名、章节副题
+     ===================================================================== -->
+<section class="slide divider" data-title="">
+  <div class="num">01</div>
+  <div class="h-slide">章节名称</div>
+  <div class="sub">这一章要讲清的一件事。</div>
+</section>
+
+<!-- =====================================================================
+     第 5 页 · 图表页（左文右图）
+     左侧叙述 + 右侧 SVG 图表。图表由 JS 绘制（见底部 drawDemoChart），
+     数据在 CHART_DATA 里改。容器 id 对上即可。
+     ===================================================================== -->
+<section class="slide" data-title="页眉标题：图表页示例">
+  <div class="body">
+    <div class="row" style="flex:1">
+      <div style="flex:0 0 430px;display:flex;flex-direction:column;justify-content:center;gap:16px">
+        <div class="kicker">EVIDENCE · 数据</div>
+        <div class="lead">左侧放叙述：这张图说明什么、<strong>关键数字</strong>是哪个、
+          和上一页的关系。文字宽度已限制，别写太长。</div>
+        <div class="takeaway" style="text-align:left;margin:0">结论一句话。</div>
+      </div>
+      <div class="fill" style="min-height:420px"><div id="c-demo" class="chart"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     第 6 页 · 表格页
+     深色主题网页表格，适合参数/方案对比。
+     ===================================================================== -->
+<section class="slide" data-title="页眉标题：表格页示例">
+  <div class="body" style="justify-content:center">
+    <table class="dtable">
+      <tr><th>维度</th><th>方案 A</th><th>方案 B</th><th>结论</th></tr>
+      <tr><td>成本</td><td class="num">¥1.2/万次</td><td class="num">¥3.8/万次</td><td class="gr">A 优</td></tr>
+      <tr><td>延迟</td><td class="num">120 ms</td><td class="num">45 ms</td><td class="bl">B 优</td></tr>
+      <tr><td>适用场景</td><td>离线批处理</td><td>在线服务</td><td class="mut">按需选择</td></tr>
+    </table>
+    <div class="takeaway" style="margin-top:30px">表格结论一句话。</div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     第 7 页 · 二维码角标页（放 GitHub/产品链接时用）
+     右上角二维码 + 说明，正文照常。
+     ===================================================================== -->
+<section class="slide" data-title="页眉标题：带二维码的页面">
+  <div class="qr-corner"><div class="qrtop">github</div><img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' fill='%23222'/><text x='48' y='52' text-anchor='middle' fill='%23666' font-family='monospace' font-size='9'>QR PLACEHOLDER</text></svg>" alt=""></div>
+  <div class="body" style="justify-content:center">
+    <div class="cap">正文照常写。右上角二维码替换 img/qr-repo.png 即可，<br>
+      也可以复制 .qr-corner 块到任何一页。</div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     第 8 页 · 结尾页
+     ===================================================================== -->
+<section class="slide closing">
+  <div class="bigclaim">收尾金句，<br><span class="cy">呼应主题</span>。</div>
+  <div class="who">姓名 · 头衔</div>
+  <div class="links">
+    <a href="https://example.com">example.com</a>
+    <a href="https://github.com/xxx">@xxx</a>
+  </div>
+</section>
+
+<!-- ======================= 页眉页脚模板（全局改这里） ======================= -->
+<div id="chrome-src">
+  <div class="chrome c-hdr">
+    <div class="ttl"><span>默认页眉标题（会被每页 data-title 覆盖）</span></div>
+    <!-- 有 logo 图放这里：<img src="img/logos.png" alt=""> -->
+    <div class="logos"></div>
+  </div>
+  <div class="chrome c-foot">
+    <div class="en">English Slogan Here</div>
+    <div class="cn">活动中文名</div>
+  </div>
+  <div class="chrome c-pgw"><span class="pgn"></span></div>
+</div>
+
+</div><!-- /stage -->
+
+<script>
+/* =====================================================================
+   引擎部分：以下三段一般不用动
+   ===================================================================== */
+
+/* 1) 把页眉/页脚/页码克隆进每一页（首末页除外），data-title 注入页眉 */
+const stage=document.getElementById('stage');
+const slides=[...document.querySelectorAll('.slide')];
+(function(){
+  const tpl=[...document.getElementById('chrome-src').children];
+  slides.forEach((s,k)=>{
+    if(k===0||k===slides.length-1) return;
+    tpl.forEach(t=>{
+      const c=t.cloneNode(true);
+      const p=c.querySelector('.pgn'); if(p) p.textContent=(k+1)+' / '+slides.length;
+      const h=c.querySelector('.ttl span');
+      if(h){ const own=s.getAttribute('data-title'); if(own!==null) h.textContent=own; }
+      s.appendChild(c);
+    });
+  });
+})();
+
+/* 2) 翻页 + 缩放 */
+let i=0;
+function show(n){
+  i=Math.max(0,Math.min(slides.length-1,n));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  if(location.hash!=='#'+(i+1)) history.replaceState(null,'','#'+(i+1));
+}
+function fit(){
+  const vv=window.visualViewport;
+  const w=(vv&&vv.width)||window.innerWidth||1280, h=(vv&&vv.height)||window.innerHeight||720;
+  let s=Math.min(w/1280,h/720); if(!(s>0)) s=1;
+  stage.style.transform=`translate(-50%,-50%) scale(${s})`;
+}
+['resize','orientationchange','load','pageshow'].forEach(ev=>window.addEventListener(ev,fit));
+if(window.visualViewport) window.visualViewport.addEventListener('resize',fit);
+
+/* 3) 导航：键盘 / 点击（屏幕左 32% 后退）/ hash 直达 / f 全屏 */
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){show(i+1);e.preventDefault();}
+  else if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){show(i-1);e.preventDefault();}
+  else if(e.key==='Home'){show(0);} else if(e.key==='End'){show(slides.length-1);}
+  else if(e.key==='f'){document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();}
+});
+stage.addEventListener('click',e=>{ if(e.clientX<window.innerWidth*0.32) show(i-1); else show(i+1); });
+
+/* =====================================================================
+   SVG 图表工具库：无任何依赖，用 JS 画矢量图，风格与主题统一。
+   el() 造节点 / txt() 造文字 / mount() 取容器并建 SVG 画布
+   ===================================================================== */
+const SVGNS='http://www.w3.org/2000/svg';
+const INK='#F2F5FA', MUT='#C6CEDC', CYAN='#26C6DA', BLUE='#3B6FF0', BLUE2='#5E8FF8',
+      PINK='#DC3CB4', GREEN='#27C08A',
+      GRID='rgba(198,206,220,.36)', FAINT='rgba(198,206,220,.18)';
+function el(t,a){const e=document.createElementNS(SVGNS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+function txt(x,y,s,o={}){const t=el('text',{x,y,'font-family':o.mono?'var(--mono)':'var(--sans)',
+  'font-size':o.fs||13,'font-weight':o.fw||400,fill:o.fill||INK,'text-anchor':o.anchor||'start','letter-spacing':o.ls||0});
+  t.textContent=s;return t;}
+function mount(id,w,h){const c=document.getElementById(id);if(!c)return null;c.innerHTML='';
+  const svg=el('svg',{viewBox:`0 0 ${w} ${h}`,preserveAspectRatio:'xMidYMid meet'});c.appendChild(svg);return svg;}
+function ylabel(svg,x,ymid,s,fs){const t=txt(x,ymid,s,{fs:fs||12.5,fw:600,anchor:'middle',fill:MUT});
+  t.setAttribute('transform',`rotate(-90 ${x} ${ymid})`);svg.appendChild(t);}
+
+/* =====================================================================
+   图表数据与绘制：改这里。画好新图后在 renderAll() 里挂上。
+   ===================================================================== */
+const CHART_DATA={
+  bars:[
+    {label:'基线', value:0.42, hot:false},
+    {label:'方案A', value:0.55, hot:false},
+    {label:'方案B', value:0.61, hot:false},
+    {label:' ours', value:0.74, hot:true},   /* hot=true 的柱子用青色高亮 */
+  ]
+};
+
+/* 示例：柱状图。照抄改数据即可；散点/折线同套路：算坐标 → el('circle'/'path') */
+function drawDemoChart(){
+  const W=640,H=420,L=64,R=16,T=26,B=56;
+  const svg=mount('c-demo',W,H); if(!svg)return;
+  const d=CHART_DATA.bars, ymax=0.8;
+  const Y=v=>H-B-(v/ymax)*(H-T-B), bw=(W-L-R)/d.length;
+  [0,0.2,0.4,0.6,0.8].forEach(v=>                      /* 网格线 */
+    svg.appendChild(el('line',{x1:L,y1:Y(v),x2:W-R,y2:Y(v),stroke:FAINT,'stroke-width':1})));
+  svg.appendChild(el('line',{x1:L,y1:Y(0),x2:W-R,y2:Y(0),stroke:GRID,'stroke-width':1.4}));
+  svg.appendChild(el('line',{x1:L,y1:T,x2:L,y2:Y(0),stroke:GRID,'stroke-width':1.4}));
+  d.forEach((m,k)=>{
+    const cx=L+bw*k+bw/2, w=Math.min(70,bw*0.54);
+    svg.appendChild(el('rect',{x:cx-w/2,y:Y(m.value),width:w,height:Y(0)-Y(m.value),
+      fill:m.hot?CYAN:BLUE2,rx:3,opacity:m.hot?1:.85}));
+    svg.appendChild(txt(cx,Y(m.value)-10,m.value.toFixed(2),
+      {fs:14,mono:1,fw:700,anchor:'middle',fill:m.hot?CYAN:INK}));
+    svg.appendChild(txt(cx,Y(0)+22,m.label,{fs:12.5,mono:1,anchor:'middle',fw:600,fill:MUT}));
+  });
+  svg.appendChild(txt((L+W-R)/2,H-6,'横轴说明 →',{fs:12.5,fw:600,anchor:'middle',fill:MUT}));
+  ylabel(svg,L-36,(T+Y(0))/2,'纵轴说明 →',12);
+}
+
+/* 首屏：缩放 + 按 hash 定位（如 #5 直达第 5 页）+ 画全部图表 */
+function renderAll(){ drawDemoChart(); /* 新图在这里加：drawXxx(); */ }
+function init(){
+  fit(); requestAnimationFrame(fit);
+  [60,160,320,650,1200].forEach(t=>setTimeout(fit,t));
+  const h=parseInt((location.hash||'#1').slice(1))||1; show(h-1);
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(renderAll);
+  renderAll();
+}
+init();
+</script>
+
+<!-- =====================================================================
+可选增强（按需自行加入）：
+
+· 数学公式 MathJax：下载 tex-svg.js 放 vendor/，然后在 </body> 前加
+  <script>window.MathJax={tex:{inlineMath:[['\\(','\\)']]},svg:{fontCache:'none'}};</script>
+  <script src="vendor/tex-svg.js"></script>
+
+· 字体自托管（思源黑体/Inter）：
+  1. 用 glyphhanger / fontmin 按实际用字做子集化，输出 woff2 到 fonts/
+  2. 文件顶部 CSS 加 @font-face，并把 --sans/--mono 指向新字体族
+  （肖涵那套用的就是思源黑体 CN 4 字重 + Inter，全部子集化自托管）
+
+· 页内自动播放动画（如图表 morph）：参考 rAF 写法，
+  在 show() 里翻到该页时调用你的 restart 函数即可。
+===================================================================== -->
+</body>
+</html>
